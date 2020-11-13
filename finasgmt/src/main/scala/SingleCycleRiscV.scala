@@ -53,6 +53,7 @@ class SingleCycleRiscV extends Module {
   val funct3 = instr(14, 12)
   val funct7 = instr(31 ,25)
   val imm = instr(31, 20) // TODO sign extend
+  val shift = WireInit(0.U (5.W)) //kan måske ændres til reg(rs2) direkte
 
   switch(opcode) {
     is(0x33.U) {                              //R-type
@@ -72,10 +73,11 @@ class SingleCycleRiscV extends Module {
         }
         is(0x7.U) {
           reg(rd) := reg(rs1) & reg(rs2) //and
-        } /*
-        is(0x1.U) {
-          reg(rd) := reg(rs1) << reg(rs2) //sll
-        } */
+        }
+        is(0x1.U) {     //sll
+          shift := reg(rs2)
+          reg(rd) := reg(rs1) << shift
+        }
         /*
         is(0x5.U) {
           switch(funct7) {
