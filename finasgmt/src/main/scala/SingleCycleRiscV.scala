@@ -117,10 +117,10 @@ class SingleCycleRiscV extends Module {
         is(0x0.U) {
           reg(rd) := reg(rs1) + imm //lb ****** implement memory
         }
+      }
+      is(0x23.U) { //S-type
+      }
     }
-    is(0x23.U) {                              //S-type
-    }
-
   }
 
   pc := pc + 4.U
