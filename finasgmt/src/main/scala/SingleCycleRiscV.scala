@@ -60,10 +60,11 @@ class SingleCycleRiscV extends Module {
         }
         is(0x7.U) {
           reg(rd) := reg(rs1) & reg(rs2) //and
-        }
+        } /*
         is(0x1.U) {
           reg(rd) := reg(rs1) << reg(rs2) //sll
-        }
+        } */
+        /*
         is(0x5.U) {
           switch(funct7) {
             is(0x00.U) {
@@ -74,8 +75,9 @@ class SingleCycleRiscV extends Module {
             }
           }
         }
+
+         */
       }
-      reg(rd) := reg(rs1) + reg(rs2) //add
     }
     is(0x13.U) {                              //I-type
       switch(funct3) {
@@ -91,9 +93,10 @@ class SingleCycleRiscV extends Module {
         is(0x7.U) {
           reg(rd) := reg(rs1) & imm //andi
         }
-        is(0x1.U) {
-          reg(rd) := reg(rs1) << imm(0, 4) //slli
-        }
+        //is(0x1.U) {
+          //reg(rd) := reg(rs1) << imm(0, 4) //slli
+        //}
+        /*
         is(0x5.U) {
           switch(imm(5, 11)) {
             is(0x00.U) {
@@ -103,7 +106,7 @@ class SingleCycleRiscV extends Module {
               reg(rd) := reg(rs1) >> imm(0, 4) //srai ***** mangler msb-extend
             }
           }
-        }
+        }*/
         is(0x2.U) {
           reg(rd) := reg(rs1) < imm //slti ****** virker måske ikke?
         }
@@ -118,8 +121,11 @@ class SingleCycleRiscV extends Module {
           reg(rd) := reg(rs1) + imm //lb ****** implement memory
         }
       }
+      /*
       is(0x23.U) { //S-type
       }
+
+       */
     }
   }
 
