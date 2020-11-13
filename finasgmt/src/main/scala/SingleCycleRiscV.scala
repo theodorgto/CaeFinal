@@ -8,26 +8,38 @@ import chisel3.util._
   */
 class SingleCycleRiscV extends Module {
   val io = IO(new Bundle {
-    val regDeb = Output(Vec(4, UInt(32.W))) // debug output for the tester
+    val regDeb = Output(Vec(32, UInt(32.W))) // debug output for the tester
     val done = Output(Bool())
+    val imem = Output(Vec(4, UInt(32.W)))
   })
 
 
   // TODO: the program should be read in from a file
   val program = Array[Int](
-    0x00200093, // addi x1 x0 2
-    0x00300113, // addi x2 x0 3
-    0x002081b3) // add x3 x1 x2
+    0x00500513, // addi x1 x0 2
+    0x00600593, // addi x2 x0 3
+    0x00b50633,
+    0x00a00513,
+    0x00000073) // add x3 x1 x2
 
   // A little bit of functional magic to convert the Scala Int Array to a Chisel Vec of UInt
   val imem = VecInit(program.map(_.U(32.W)))
+  for (i <- 0 until 4) io.imem(i) := imem(i)
 
+
+/*
+  val program = CopyBytes("tests/task1/addpos.bin")
+  val program2 = program.map(x => UnsignedInt.unsignedInt(x))
+  val imem = VecInit(program2.map(_.U(32.W)))
+  //io.imem <> imem
+  for (i <- 0 until 4) io.imem(i) := imem(i)
+*/
 
   val pc = RegInit(0.U(32.W))
 
   // TODO: there should be an elegant way to express this
-  val vec = Wire(Vec(4, UInt(32.W)))
-  for (i <- 0 until 4) vec(i) := 0.U
+  val vec = Wire(Vec(32, UInt(32.W)))
+  for (i <- 0 until 32) vec(i) := 0.U
   // We initialize the register file to 0 for a nicer display
   // In a real processor this is usually not done
   val reg = RegInit(vec)
@@ -135,7 +147,7 @@ class SingleCycleRiscV extends Module {
   io.done := true.B
 
   // Make the register file visible to the tester
-  for (i <- 0 until 4) io.regDeb(i) := reg(i)
+  for (i <- 0 until 32) io.regDeb(i) := reg(i)
 }
 
 

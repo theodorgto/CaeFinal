@@ -44,6 +44,16 @@ finasgmt/.idea/sbt.xml
 finasgmt/.idea/scala_compiler.xml
 finasgmt/.idea/vcs.xml
 finasgmt/.idea/workspace.xml
+finasgmt/.bsp/
+finasgmt/.idea/
+finasgmt/project/
+finasgmt/target/
+finasgmt/test_run_dir/
+project/
+target/
+.DS_Store
+.bsp/
+.idea/
 finasgmt/project/build.properties
 finasgmt/project/target/config-classes/$2b83d8532046749e4484$.class
 finasgmt/project/target/config-classes/$2b83d8532046749e4484.cache
@@ -252,3 +262,4 @@ finasgmt/test_run_dir/RiscVSpec799332110/SingleCycleRiscV.anno.json
 finasgmt/test_run_dir/RiscVSpec799332110/SingleCycleRiscV.fir
 finasgmt/test_run_dir/RiscVSpec87780668/SingleCycleRiscV.anno.json
 finasgmt/test_run_dir/RiscVSpec87780668/SingleCycleRiscV.fir
+
