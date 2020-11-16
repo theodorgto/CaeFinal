@@ -10,30 +10,14 @@ class SingleCycleRiscV extends Module {
   val io = IO(new Bundle {
     val regDeb = Output(Vec(32, UInt(32.W))) // debug output for the tester
     val done = Output(Bool())
-    val imem = Output(Vec(4, UInt(32.W)))
+    val imemDeb = Output(Vec(32, SInt(32.W)))
   })
 
+  for (i <- 0 until 32) io.imemDeb(i) := 0.S
+  val program = CopyBytes("tests/task1/addneg.bin") //load machine code from file
+  val imem = VecInit(program.map(_.S(32.W)))  //map to chisel vec
+  for (i <- program.indices) io.imemDeb(i) := imem(i) //for the tester
 
-  // TODO: the program should be read in from a file
-  val program = Array[Int](
-    0x00500513, // addi x1 x0 2
-    0x00600593, // addi x2 x0 3
-    0x00b50633,
-    0x00a00513,
-    0x00000073) // add x3 x1 x2
-
-  // A little bit of functional magic to convert the Scala Int Array to a Chisel Vec of UInt
-  val imem = VecInit(program.map(_.U(32.W)))
-  for (i <- 0 until 4) io.imem(i) := imem(i)
-
-
-/*
-  val program = CopyBytes("tests/task1/addpos.bin")
-  val program2 = program.map(x => UnsignedInt.unsignedInt(x))
-  val imem = VecInit(program2.map(_.U(32.W)))
-  //io.imem <> imem
-  for (i <- 0 until 4) io.imem(i) := imem(i)
-*/
 
   val pc = RegInit(0.U(32.W))
 
@@ -52,7 +36,13 @@ class SingleCycleRiscV extends Module {
   val rs2 = instr(24, 20)
   val funct3 = instr(14, 12)
   val funct7 = instr(31 ,25)
-  val imm = instr(31, 20) // TODO sign extend
+  val imm = WireInit(0.U (32.W))
+  var sign = instr(31)
+  when (sign) {                           //sign extension
+    imm := Cat(0xFFFFF.U, instr(31, 20))
+  } otherwise {
+    imm := instr(31, 20)
+  }
   val shift = WireInit(0.U (5.W)) //kan måske ændres til reg(rs2) direkte
 
   switch(opcode) {
@@ -149,7 +139,8 @@ class SingleCycleRiscV extends Module {
   io.done := true.B
 
   // Make the register file visible to the tester
-  for (i <- 0 until 32) io.regDeb(i) := reg(i)
+  //for (i <- 0 until 32) io.regDeb(i) := reg(i)
+  io.regDeb <> reg
 }
 
 
