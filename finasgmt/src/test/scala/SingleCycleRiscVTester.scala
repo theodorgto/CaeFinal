@@ -8,7 +8,7 @@ class RiscVSpec extends FlatSpec with Matchers {
 
         def printReg() = {
           for (i <- 0 until 32) {
-            print(peek(dut.io.regDeb(i)).toString + " ")
+            print(peek(dut.io.regDeb(i)).toString + "\t")
           }
           println()
         }
