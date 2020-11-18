@@ -14,11 +14,23 @@ class SingleCycleRiscV extends Module {
   })
 
   for (i <- 0 until 32) io.imemDeb(i) := 0.S
-  val program = CopyBytes("tests/task1/addneg.bin") //load machine code from file
-  val imem = VecInit(program.map(_.S(32.W)))  //map to chisel vec
-  for (i <- program.indices) io.imemDeb(i) := imem(i) //for the tester
+  /*
+   val program = CopyBytes("tests/task1/addneg.bin") //load machine code from file
+   val imem = VecInit(program.map(_.S(32.W)))  //map to chisel vec
+   for (i <- program.indices) io.imemDeb(i) := imem(i) //for the tester
+  */
+  val program = Array[BigInt](
+    0x00000313,
+    0x04f28293,
+    0x00829293,
+    0x02f28293,
+    0x00829293,
+    0x0ff28293,
+    0x00532023,
+    0x00032383)
 
-
+  // A little bit of functional magic to convert the Scala Int Array to a Chisel Vec of UInt
+  val imem = VecInit(program.map(_.S(32.W)))
   val pc = RegInit(0.U(32.W))
 
   // TODO: there should be an elegant way to express this
@@ -44,6 +56,12 @@ class SingleCycleRiscV extends Module {
     imm := instr(31, 20)
   }
   val shift = WireInit(0.U (5.W)) //kan måske ændres til reg(rs2) direkte
+
+  //memory - 1MB
+  val addr = reg(rs1) + imm
+  val dataIn = reg(rs2)
+  val test = dataIn(7,0)
+  val mem = SyncReadMem(1000000, UInt(8.W))
 
   switch(opcode) {
     is(0x33.U) {                              //R-type
@@ -97,17 +115,17 @@ class SingleCycleRiscV extends Module {
         is(0x7.U) {
           reg(rd) := reg(rs1) & imm //andi
         }
-        //is(0x1.U) {
-          //reg(rd) := reg(rs1) << imm(0, 4) //slli
-        //}
+        is(0x1.U) {
+          reg(rd) := reg(rs1) << imm(4, 0) //slli
+        }
         /*
         is(0x5.U) {
           switch(imm(5, 11)) {
             is(0x00.U) {
-              reg(rd) := reg(rs1) >> imm(0, 4) //srli
+              reg(rd) := reg(rs1) >> imm(4, 0) //srli
             }
             is(0x20.U) {
-              reg(rd) := reg(rs1) >> imm(0, 4) //srai ***** mangler msb-extend
+              reg(rd) := reg(rs1) >> imm(4, 0) //srai ***** mangler msb-extend
             }
           }
         }*/
@@ -119,19 +137,49 @@ class SingleCycleRiscV extends Module {
         }
       }
     }
-    is(0x03.U) {
+    is(0x03.U) { //I-type loads
       switch(funct3) {
-        is(0x0.U) {
-          reg(rd) := reg(rs1) + imm //lb ****** implement memory
+        is(0x0.U) { //lb
+          reg(rd) := mem.read(addr)
+          when((mem.read(addr) & 0x80.U) === 0x80.U) { //sign-extend?
+           reg(rd) := ~reg(rd)
+          }
+        }
+        is(0x1.U) { //lh
+          reg(rd) := Cat(0x0000.U,mem.read(addr + 1.U), mem.read(addr))
+          when((mem.read(addr + 1.U) & 0x80.U) === 0x80.U) { //sign-extend
+            reg(rd) := ~reg(rd)
+          }
+        }
+        is(0x2.U) { //lw
+          reg(rd) := Cat(mem.read(addr + 3.U), mem.read(addr + 2.U), mem.read(addr + 1.U), mem.read(addr))
+        }
+        is(0x4.U) { //lbu
+          reg(rd) := mem.read(addr)
+        }
+        is(0x5.U) { //lhu
+          reg(rd) := Cat(mem.read(addr + 1.U), mem.read(addr))
         }
       }
-      /*
-      is(0x23.U) { //S-type
-      }
-
-       */
     }
-  }
+      is(0x23.U) { //S-type
+        switch(funct3) {
+          is(0x0.U) { //sb
+            mem.write(addr, dataIn(7, 0))
+          }
+          is(0x1.U) { //sh
+            mem.write(addr, dataIn(7, 0))
+            mem.write(addr + 1.U, dataIn(15, 8))
+          }
+          is(0x2.U) { //sw
+            mem.write(addr, dataIn(7, 0))
+            mem.write(addr + 1.U, dataIn(15, 8))
+            mem.write(addr + 2.U, dataIn(23, 16))
+            mem.write(addr + 3.U, dataIn(31, 24))
+          }
+        }
+      }
+    }
 
   pc := pc + 4.U
 

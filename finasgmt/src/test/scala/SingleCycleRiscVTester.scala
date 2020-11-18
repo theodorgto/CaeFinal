@@ -17,7 +17,7 @@ class RiscVSpec extends FlatSpec with Matchers {
           println()
         }
 
-        for (i <- 0 until 4) {
+        for (i <- 0 until 8) {
           step(1)
           println("Instruction no. " + i + ": 0x" + Integer.toHexString(peek(dut.io.imemDeb(i)).toInt))
           printReg()
