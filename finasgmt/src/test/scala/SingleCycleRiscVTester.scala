@@ -12,14 +12,14 @@ class RiscVSpec extends FlatSpec with Matchers {
           }
           println()
           for (i <- 0 until 32) {
-            print(peek(dut.io.regDeb(i)).toInt + "\t")
+            print(Integer.toHexString(peek(dut.io.regDeb(i)).toInt) + "\t")
           }
           println()
         }
 
-        for (i <- 0 until 8) {
+        for (i <- 0 until 27) {
           step(1)
-          println("Instruction no. " + i + ": 0x" + Integer.toHexString(peek(dut.io.imemDeb(i)).toInt))
+          println(peek(dut.io.pcDeb) + ": 0x" + Integer.toHexString(peek(dut.io.imemDeb(i)).toInt))
           printReg()
         }
       }

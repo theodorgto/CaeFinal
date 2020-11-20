@@ -11,26 +11,24 @@ class SingleCycleRiscV extends Module {
     val regDeb = Output(Vec(32, UInt(32.W))) // debug output for the tester
     val done = Output(Bool())
     val imemDeb = Output(Vec(32, SInt(32.W)))
+    val pcDeb = Output(UInt(32.W))
   })
 
   for (i <- 0 until 32) io.imemDeb(i) := 0.S
-  /*
-   val program = CopyBytes("tests/task1/addneg.bin") //load machine code from file
-   val imem = VecInit(program.map(_.S(32.W)))  //map to chisel vec
-   for (i <- program.indices) io.imemDeb(i) := imem(i) //for the tester
-  */
+/*  val program = CopyBytes("tests/task2/branchcnt.bin") //load machine code from file
+  val imem = VecInit(program.map(_.S(32.W)))  //map to chisel vec
+  for (i <- program.indices) io.imemDeb(i) := imem(i) //for the tester
+*/
+
   val program = Array[BigInt](
-    0x00000313,
-    0x04f28293,
-    0x00829293,
-    0x02f28293,
-    0x00829293,
-    0x0ff28293,
-    0x00532023,
-    0x00032383)
+    0x00500513,
+    0xff900593,
+    0xfeb55ce3)
 
   // A little bit of functional magic to convert the Scala Int Array to a Chisel Vec of UInt
   val imem = VecInit(program.map(_.S(32.W)))
+
+
   val pc = RegInit(0.U(32.W))
 
   // TODO: there should be an elegant way to express this
@@ -49,12 +47,19 @@ class SingleCycleRiscV extends Module {
   val funct3 = instr(14, 12)
   val funct7 = instr(31 ,25)
   val imm = WireInit(0.U (32.W))
+  val Bimm = WireInit(0.U (32.W))
+  val Simm = WireInit(0.U (32.W))
   var sign = instr(31)
   when (sign) {                           //sign extension
     imm := Cat(0xFFFFF.U, instr(31, 20))
+    Bimm := Cat(0xFFFFF.U, instr(31),instr(7),instr(30,25),instr(11,8),"b0".U)
+    Simm := Cat(0xFFFFF.U, instr(31,25),instr(11,7))
   } otherwise {
     imm := instr(31, 20)
+    Bimm := Cat(instr(31),instr(7),instr(30,25),instr(11,8),"b0".U)
+    Simm := Cat(instr(31,25),instr(11,7))
   }
+  val sraisign = reg(rs1)
   val shift = WireInit(0.U (5.W)) //kan måske ændres til reg(rs2) direkte
 
   //memory - 1MB
@@ -62,6 +67,8 @@ class SingleCycleRiscV extends Module {
   val dataIn = reg(rs2)
   val test = dataIn(7,0)
   val mem = SyncReadMem(1000000, UInt(8.W))
+
+  pc := pc + 4.U
 
   switch(opcode) {
     is(0x33.U) {                              //R-type
@@ -86,19 +93,27 @@ class SingleCycleRiscV extends Module {
           shift := reg(rs2)
           reg(rd) := reg(rs1) << shift
         }
-        /*
         is(0x5.U) {
           switch(funct7) {
             is(0x00.U) {
               reg(rd) := reg(rs1) >> reg(rs2) //srl
             }
             is(0x20.U) {
-              reg(rd) := reg(rs1) >> reg(rs2) //sra ***** mangler msb-extend
+              reg(rd) := reg(rs1) >> reg(rs2) //sra             ***** mangler msb-extend
             }
           }
         }
+        is(0x2.U) {
+          when(reg(rs1)(31) =/= reg(rs2)(31)){ //slt
+            reg(rd) := reg(rs1) > reg(rs2)
+          } otherwise {
+            reg(rd) := reg(rs1) < reg(rs2)
+          }
+        }
+        is(0x3.U) {
+          reg(rd) := reg(rs1) < reg(rs2) //sltu
+        }
 
-         */
       }
     }
     is(0x13.U) {                              //I-type
@@ -118,22 +133,31 @@ class SingleCycleRiscV extends Module {
         is(0x1.U) {
           reg(rd) := reg(rs1) << imm(4, 0) //slli
         }
-        /*
         is(0x5.U) {
-          switch(imm(5, 11)) {
+          switch(imm(11,5)) {
             is(0x00.U) {
-              reg(rd) := reg(rs1) >> imm(4, 0) //srli
+            //  reg(rd) := reg(rs1) >> imm(4, 0) //srli
             }
-            is(0x20.U) {
-              reg(rd) := reg(rs1) >> imm(4, 0) //srai ***** mangler msb-extend
+            is(0x20.U) {                                      //***** mangler msb-extend
+              reg(rd) := reg(rs1) >> imm(4, 0)
+              when(reg(rs1)(31.U - imm(4,0))) {
+                //val bal = 31
+                reg(rd) := Cat(0xFFFFF.U, reg(rs1)(31,0)) //srai
+              } otherwise {
+                //reg(rd) := reg(rs1) >> imm(4, 0)
+              }
             }
           }
-        }*/
+        }
         is(0x2.U) {
-          reg(rd) := reg(rs1) < imm //slti ****** virker måske ikke?
+          when(reg(rs1)(31) =/= imm(31)){ //slti
+            reg(rd) := reg(rs1) > imm
+          } otherwise {
+            reg(rd) := reg(rs1) < imm
+          }
         }
         is(0x3.U) {
-          reg(rd) := reg(rs1) < imm //sltiu ****** virker måske ikke? mangler zero-extend
+          reg(rd) := reg(rs1) < imm //sltiu
         }
       }
     }
@@ -141,13 +165,13 @@ class SingleCycleRiscV extends Module {
       switch(funct3) {
         is(0x0.U) { //lb
           reg(rd) := mem.read(addr)
-          when((mem.read(addr) & 0x80.U) === 0x80.U) { //sign-extend?
+          when(mem.read(addr)(7)) { //sign-extend?
            reg(rd) := ~reg(rd)
           }
         }
         is(0x1.U) { //lh
           reg(rd) := Cat(0x0000.U,mem.read(addr + 1.U), mem.read(addr))
-          when((mem.read(addr + 1.U) & 0x80.U) === 0x80.U) { //sign-extend
+          when(mem.read(addr + 1.U)(7)) { //sign-extend
             reg(rd) := ~reg(rd)
           }
         }
@@ -162,32 +186,77 @@ class SingleCycleRiscV extends Module {
         }
       }
     }
-      is(0x23.U) { //S-type
-        switch(funct3) {
-          is(0x0.U) { //sb
-            mem.write(addr, dataIn(7, 0))
+    is(0x23.U) { //S-type
+      switch(funct3) {
+        is(0x0.U) { //sb
+          mem.write(addr, dataIn(7, 0))
+        }
+        is(0x1.U) { //sh
+          mem.write(addr, dataIn(7, 0))
+          mem.write(addr + 1.U, dataIn(15, 8))
+        }
+        is(0x2.U) { //sw
+          mem.write(addr, dataIn(7, 0))
+          mem.write(addr + 1.U, dataIn(15, 8))
+          mem.write(addr + 2.U, dataIn(23, 16))
+          mem.write(addr + 3.U, dataIn(31, 24))
+        }
+      }
+    }
+    is(0x63.U) { //B-type
+      switch(funct3) {
+        is(0x0.U) { //beq
+          when(reg(rs1) === reg(rs2)) {
+            pc := pc + Bimm
           }
-          is(0x1.U) { //sh
-            mem.write(addr, dataIn(7, 0))
-            mem.write(addr + 1.U, dataIn(15, 8))
+        }
+        is(0x1.U) { //bne
+          when(reg(rs1) =/= reg(rs2)) {
+            pc := pc + Bimm
           }
-          is(0x2.U) { //sw
-            mem.write(addr, dataIn(7, 0))
-            mem.write(addr + 1.U, dataIn(15, 8))
-            mem.write(addr + 2.U, dataIn(23, 16))
-            mem.write(addr + 3.U, dataIn(31, 24))
+        }
+        is(0x4.U) { //blt
+          when(reg(rs1)(31) =/= reg(rs2)(31)) {
+            when(reg(rs1) > reg(rs2)) {
+              pc := pc + Bimm
+            }
+          } otherwise {
+            when(reg(rs1) < reg(rs2)) {
+              pc := pc + Bimm
+            }
+          }
+        }
+        is(0x5.U) { //bge
+          when(reg(rs1)(31) =/= reg(rs2)(31)) {
+            when(reg(rs1) <= reg(rs2)) {
+              pc := pc + Bimm
+            }
+          } otherwise {
+            when(reg(rs1) >= reg(rs2)) {
+              pc := pc + Bimm
+            }
+          }
+        }
+        is(0x6.U) { //bltu
+          when(reg(rs1) < reg(rs2)) {
+            pc := pc + Bimm
+          }
+        }
+        is(0x7.U) { //bgeu
+          when(reg(rs1) >= reg(rs2)) {
+            pc := pc + Bimm
           }
         }
       }
     }
-
-  pc := pc + 4.U
+  }
 
   // done should be set when the program ends, and the tester shall stop
   io.done := true.B
 
   // Make the register file visible to the tester
   //for (i <- 0 until 32) io.regDeb(i) := reg(i)
+  io.pcDeb <> pc
   io.regDeb <> reg
 }
 
