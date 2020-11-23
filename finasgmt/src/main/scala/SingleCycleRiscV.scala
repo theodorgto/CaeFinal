@@ -10,24 +10,28 @@ class SingleCycleRiscV extends Module {
   val io = IO(new Bundle {
     val regDeb = Output(Vec(32, UInt(32.W))) // debug output for the tester
     val done = Output(Bool())
-    val imemDeb = Output(Vec(32, SInt(32.W)))
+    val imemDeb = Output(Vec(109, SInt(32.W)))
     val pcDeb = Output(UInt(32.W))
   })
 
-  for (i <- 0 until 32) io.imemDeb(i) := 0.S
-/*  val program = CopyBytes("tests/task2/branchcnt.bin") //load machine code from file
+  for (i <- 0 until 109) io.imemDeb(i) := 0.S
+  val program = CopyBytes("tests/task3/loop.bin") //load machine code from file
   val imem = VecInit(program.map(_.S(32.W)))  //map to chisel vec
   for (i <- program.indices) io.imemDeb(i) := imem(i) //for the tester
-*/
 
+
+  /*
   val program = Array[BigInt](
-    0x00500513,
-    0xff900593,
-    0xfeb55ce3)
+    0x00400297,
+    0x00400317,
+    0x70400397,
+    0x00000e17,
+    0x00a00513,
+    0x00000073)
 
   // A little bit of functional magic to convert the Scala Int Array to a Chisel Vec of UInt
   val imem = VecInit(program.map(_.S(32.W)))
-
+  */
 
   val pc = RegInit(0.U(32.W))
 
@@ -49,21 +53,27 @@ class SingleCycleRiscV extends Module {
   val imm = WireInit(0.U (32.W))
   val Bimm = WireInit(0.U (32.W))
   val Simm = WireInit(0.U (32.W))
+  val Jimm = WireInit(0.U (32.W))
+  val Uimm = WireInit(0.U (32.W))
+  Uimm := instr(31, 12) << 12
   var sign = instr(31)
   when (sign) {                           //sign extension
     imm := Cat(0xFFFFF.U, instr(31, 20))
     Bimm := Cat(0xFFFFF.U, instr(31),instr(7),instr(30,25),instr(11,8),"b0".U)
     Simm := Cat(0xFFFFF.U, instr(31,25),instr(11,7))
+    Jimm := Cat(0xFFFFF.U, instr(31), instr(19, 12), instr(20), instr(30, 21), "b0".U)
   } otherwise {
     imm := instr(31, 20)
     Bimm := Cat(instr(31),instr(7),instr(30,25),instr(11,8),"b0".U)
     Simm := Cat(instr(31,25),instr(11,7))
+    Jimm := Cat(instr(31), instr(19, 12), instr(20), instr(30, 21), "b0".U)
   }
   val sraisign = reg(rs1)
   val shift = WireInit(0.U (5.W)) //kan måske ændres til reg(rs2) direkte
 
   //memory - 1MB
-  val addr = reg(rs1) + imm
+  val writeAddr = reg(rs1) + Simm
+  val readAddr = reg(rs1) + imm
   val dataIn = reg(rs2)
   val test = dataIn(7,0)
   val mem = SyncReadMem(1000000, UInt(8.W))
@@ -164,42 +174,42 @@ class SingleCycleRiscV extends Module {
     is(0x03.U) { //I-type loads
       switch(funct3) {
         is(0x0.U) { //lb
-          reg(rd) := mem.read(addr)
-          when(mem.read(addr)(7)) { //sign-extend?
+          reg(rd) := mem.read(readAddr)
+          when(mem.read(readAddr)(7)) { //sign-extend?
            reg(rd) := ~reg(rd)
           }
         }
         is(0x1.U) { //lh
-          reg(rd) := Cat(0x0000.U,mem.read(addr + 1.U), mem.read(addr))
-          when(mem.read(addr + 1.U)(7)) { //sign-extend
+          reg(rd) := Cat(0x0000.U,mem.read(readAddr + 1.U), mem.read(readAddr))
+          when(mem.read(readAddr + 1.U)(7)) { //sign-extend
             reg(rd) := ~reg(rd)
           }
         }
         is(0x2.U) { //lw
-          reg(rd) := Cat(mem.read(addr + 3.U), mem.read(addr + 2.U), mem.read(addr + 1.U), mem.read(addr))
+          reg(rd) := Cat(mem.read(readAddr + 3.U), mem.read(readAddr + 2.U), mem.read(readAddr + 1.U), mem.read(readAddr))
         }
         is(0x4.U) { //lbu
-          reg(rd) := mem.read(addr)
+          reg(rd) := mem.read(readAddr)
         }
         is(0x5.U) { //lhu
-          reg(rd) := Cat(mem.read(addr + 1.U), mem.read(addr))
+          reg(rd) := Cat(mem.read(readAddr + 1.U), mem.read(readAddr))
         }
       }
     }
     is(0x23.U) { //S-type
       switch(funct3) {
         is(0x0.U) { //sb
-          mem.write(addr, dataIn(7, 0))
+          mem.write(writeAddr, dataIn(7, 0))
         }
         is(0x1.U) { //sh
-          mem.write(addr, dataIn(7, 0))
-          mem.write(addr + 1.U, dataIn(15, 8))
+          mem.write(writeAddr, dataIn(7, 0))
+          mem.write(writeAddr + 1.U, dataIn(15, 8))
         }
         is(0x2.U) { //sw
-          mem.write(addr, dataIn(7, 0))
-          mem.write(addr + 1.U, dataIn(15, 8))
-          mem.write(addr + 2.U, dataIn(23, 16))
-          mem.write(addr + 3.U, dataIn(31, 24))
+          mem.write(writeAddr, dataIn(7, 0))
+          mem.write(writeAddr + 1.U, dataIn(15, 8))
+          mem.write(writeAddr + 2.U, dataIn(23, 16))
+          mem.write(writeAddr + 3.U, dataIn(31, 24))
         }
       }
     }
@@ -248,6 +258,20 @@ class SingleCycleRiscV extends Module {
           }
         }
       }
+    }
+    is(0x6F.U) { //J-type jal
+      reg(rd) := pc + 4.U
+      pc := Jimm
+    }
+    is(0x67.U) { //I-type jalr
+      reg(rd) := pc + 4.U
+      pc := reg(rs1) + imm
+    }
+    is(0x37.U) { //U-type lui
+      reg(rd) := Uimm
+    }
+    is(0x17.U) { //U-type auipc
+      reg(rd) := pc + Uimm
     }
   }
 
