@@ -17,10 +17,11 @@ class RiscVSpec extends FlatSpec with Matchers {
           println()
         }
 
-        for (i <- 0 until 6) {
+        for (i <- 0 until 109) {
+          println(peek(dut.io.pcDeb) + ": 0x" + Integer.toHexString(peek(dut.io.imemDeb(peek(dut.io.pcDeb).toInt / 4)).toInt))
           step(1)
-          println(peek(dut.io.pcDeb) + ": 0x" + Integer.toHexString(peek(dut.io.imemDeb(i)).toInt))
           printReg()
+          //println("Memory: " + Integer.toHexString(peek(dut.io.memDeb).toInt))
         }
       }
     }

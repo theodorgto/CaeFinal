@@ -12,26 +12,30 @@ class SingleCycleRiscV extends Module {
     val done = Output(Bool())
     val imemDeb = Output(Vec(109, SInt(32.W)))
     val pcDeb = Output(UInt(32.W))
+    val memDeb = Output(UInt(32.W))
   })
 
+
   for (i <- 0 until 109) io.imemDeb(i) := 0.S
+
   val program = CopyBytes("tests/task3/loop.bin") //load machine code from file
   val imem = VecInit(program.map(_.S(32.W)))  //map to chisel vec
   for (i <- program.indices) io.imemDeb(i) := imem(i) //for the tester
 
 
-  /*
+/*
   val program = Array[BigInt](
-    0x00400297,
-    0x00400317,
-    0x70400397,
-    0x00000e17,
-    0x00a00513,
-    0x00000073)
+    0x00400513,
+    0x00200593,
+    0x00b52223,
+    0x00452603)
 
   // A little bit of functional magic to convert the Scala Int Array to a Chisel Vec of UInt
   val imem = VecInit(program.map(_.S(32.W)))
-  */
+  for (i <- program.indices) io.imemDeb(i) := imem(i) //for the tester
+
+ */
+
 
   val pc = RegInit(0.U(32.W))
 
@@ -41,6 +45,7 @@ class SingleCycleRiscV extends Module {
   // We initialize the register file to 0 for a nicer display
   // In a real processor this is usually not done
   val reg = RegInit(vec)
+  reg(0) := 0.U
 
   val instr = imem(pc(31, 2))
 
@@ -56,7 +61,7 @@ class SingleCycleRiscV extends Module {
   val Jimm = WireInit(0.U (32.W))
   val Uimm = WireInit(0.U (32.W))
   Uimm := instr(31, 12) << 12
-  var sign = instr(31)
+  val sign = instr(31)
   when (sign) {                           //sign extension
     imm := Cat(0xFFFFF.U, instr(31, 20))
     Bimm := Cat(0xFFFFF.U, instr(31),instr(7),instr(30,25),instr(11,8),"b0".U)
@@ -75,8 +80,7 @@ class SingleCycleRiscV extends Module {
   val writeAddr = reg(rs1) + Simm
   val readAddr = reg(rs1) + imm
   val dataIn = reg(rs2)
-  val test = dataIn(7,0)
-  val mem = SyncReadMem(1000000, UInt(8.W))
+  val mem = Mem(1000000, UInt(8.W))
 
   pc := pc + 4.U
 
@@ -146,7 +150,7 @@ class SingleCycleRiscV extends Module {
         is(0x5.U) {
           switch(imm(11,5)) {
             is(0x00.U) {
-            //  reg(rd) := reg(rs1) >> imm(4, 0) //srli
+              reg(rd) := reg(rs1) >> imm(4, 0) //srli
             }
             is(0x20.U) {                                      //***** mangler msb-extend
               reg(rd) := reg(rs1) >> imm(4, 0)
@@ -261,7 +265,7 @@ class SingleCycleRiscV extends Module {
     }
     is(0x6F.U) { //J-type jal
       reg(rd) := pc + 4.U
-      pc := Jimm
+      pc := pc + Jimm
     }
     is(0x67.U) { //I-type jalr
       reg(rd) := pc + 4.U
@@ -282,6 +286,5 @@ class SingleCycleRiscV extends Module {
   //for (i <- 0 until 32) io.regDeb(i) := reg(i)
   io.pcDeb <> pc
   io.regDeb <> reg
+  io.memDeb := Cat(mem.read(8.U), mem.read(9.U), mem.read(10.U), mem.read(11.U))
 }
-
-
