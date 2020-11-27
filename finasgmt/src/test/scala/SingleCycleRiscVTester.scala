@@ -1,11 +1,38 @@
 import chisel3.iotesters._
 import org.scalatest._
 import scala.util.control.Breaks._
+import java.io._
+
 
 class RiscVSpec extends FlatSpec with Matchers {
   "RiscV" should "pass" in {
     chisel3.iotesters.Driver.execute(Array("--generate-vcd-output", "on"), () => new SingleCycleRiscV()) { c =>
       new PeekPokeTester(c) {
+
+        def writeFile(): Unit = {
+          //val inputStream = new BufferedInputStream(new FileInputStream(""))
+          val outputStream = new FileOutputStream("binaryDump")
+          for (i <- 0 until 32) {
+            outputStream.write(peek(dut.io.regDeb0(i)).toByte)
+            outputStream.write(peek(dut.io.regDeb1(i)).toByte)
+            outputStream.write(peek(dut.io.regDeb2(i)).toByte)
+            outputStream.write(peek(dut.io.regDeb3(i)).toByte)
+          }
+        }
+
+        def compareFiles(): Unit = {
+          val bin = new FileInputStream("tests/task3/loop.res")
+          val res = new FileInputStream("binaryDump")
+          var noError = true
+          println("compare starts here:")
+          for(i <- 0 until 128) {
+            if(bin.read() != res.read()) {
+              println("error: " + i)
+              noError = false
+            }
+          }
+          if(noError) println("Perfect match")
+        }
 
         def printReg() = {
           //for (i <- 0 until 32) {
@@ -28,6 +55,8 @@ class RiscVSpec extends FlatSpec with Matchers {
         }
         while(peek(dut.io.done) == 0 && i < 3000)
         printReg()
+        writeFile()
+        compareFiles()
         //1245 cycles to finish L7
       }
     }

@@ -9,6 +9,10 @@ import chisel3.util._
 class SingleCycleRiscV extends Module {
   val io = IO(new Bundle {
     val regDeb = Output(Vec(32, UInt(32.W))) //debug output for the tester
+    val regDeb0 = Output(Vec(32, UInt(8.W))) //least significant byte of each register for binary dump
+    val regDeb1 = Output(Vec(32, UInt(8.W))) // ...
+    val regDeb2 = Output(Vec(32, UInt(8.W))) // ...
+    val regDeb3 = Output(Vec(32, UInt(8.W))) //most significant byte for binary dump
     val done = Output(Bool())
     val imemDeb = Output(Vec(109, SInt(32.W))) //debug output for the tester
     val pcDeb = Output(UInt(32.W)) //debug output for the tester
@@ -19,9 +23,11 @@ class SingleCycleRiscV extends Module {
   io.done := false.B
   for (i <- 0 until 109) io.imemDeb(i) := 0.S
 
+
   //load machine code from binary file using CopyBytes
   val program = CopyBytes("tests/task3/loop.bin")
   val imem = VecInit(program.map(_.S(32.W)))  //map into instruction memory as chisel vec
+
 
 /*
   val program = Array[BigInt](
@@ -31,7 +37,7 @@ class SingleCycleRiscV extends Module {
 
   // A little bit of functional magic to convert the Scala Int Array to a Chisel Vec of UInt
   val imem = VecInit(program.map(_.S(32.W)))
- */
+*/
 
 
   // TODO: there should be an elegant way to express this
@@ -71,11 +77,16 @@ class SingleCycleRiscV extends Module {
   }
   val shift = WireInit(0.U (5.W)) //kan måske ændres til reg(rs2) direkte
 
-  //memory - 1MB
+  //memory implementation
   val writeAddr = reg(rs1) + Simm
   val readAddr = reg(rs1) + imm
   val dataIn = reg(rs2)
-  val mem = Mem(1000000, UInt(8.W))
+  val mem = Mem(1048576, UInt(8.W)) //1MB
+
+  //if no more instructions, set io.done = true
+  when(pc(31,2) === program.length.asUInt()) {
+    io.done := true.B
+  }
 
   pc := pc + 4.U
 
@@ -276,7 +287,7 @@ class SingleCycleRiscV extends Module {
     is(0x17.U) { //U-type auipc
       reg(rd) := pc + Uimm
     }
-    is(0x73.U) { //ecall
+    is(0x73.U) { //ecall 10
       switch(reg(10)) {
         is(10.U) {
           io.done := true.B
@@ -289,6 +300,12 @@ class SingleCycleRiscV extends Module {
 
   // Make the io's file visible to the tester
   io.pcDeb <> pc
+  for(i <- 0 until 32) {
+    io.regDeb0(i) := reg(i)(7,0)
+    io.regDeb1(i) := reg(i)(15,8)
+    io.regDeb2(i) := reg(i)(23,16)
+    io.regDeb3(i) := reg(i)(31,24)
+  }
   io.regDeb <> reg
   for (i <- program.indices) io.imemDeb(i) := imem(i)
   //io.memDeb := Cat(mem.read(8.U), mem.read(9.U), mem.read(10.U), mem.read(11.U))
