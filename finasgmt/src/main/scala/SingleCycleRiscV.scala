@@ -1,11 +1,6 @@
 import chisel3._
 import chisel3.util._
 
-/**
-  * Author Martin Schoeberl (martin@jopdesign.com)
-  *
-  * A single-cycle implementation of RISC-V is practically an ISA simulator.
-  */
 class SingleCycleRiscV extends Module {
   val io = IO(new Bundle {
     val regDeb = Output(Vec(32, UInt(32.W))) //debug output for the tester
@@ -23,30 +18,15 @@ class SingleCycleRiscV extends Module {
   io.done := false.B
   for (i <- 0 until 109) io.imemDeb(i) := 0.S
 
-
   //load machine code from binary file using CopyBytes
-  val program = CopyBytes("tests/task3/loop.bin")
+  val program = CopyBytes("tests/additional/tasks/t11.bin")
   val imem = VecInit(program.map(_.S(32.W)))  //map into instruction memory as chisel vec
 
-
-/*
-  val program = Array[BigInt](
-    0x00a00513,
-    0x80000593,
-    0x4025d593)
-
-  // A little bit of functional magic to convert the Scala Int Array to a Chisel Vec of UInt
-  val imem = VecInit(program.map(_.S(32.W)))
-*/
-
-
-  // TODO: there should be an elegant way to express this
   val vec = Wire(Vec(32, UInt(32.W)))
-  for (i <- 0 until 32) vec(i) := 0.U
-  // We initialize the register file to 0 for a nicer display
-  // In a real processor this is usually not done
+  for (i <- 0 until 32) vec(i) := 0.U //initialize the register file to 0 for a nicer display
   val reg = RegInit(vec)
 
+  //lots of val declarations for better overview in switch table
   val pc = RegInit(0.U(32.W))
   val instr = imem(pc(31, 2)) //byte offset
   val opcode = instr(6, 0)
@@ -56,14 +36,13 @@ class SingleCycleRiscV extends Module {
   val funct3 = instr(14, 12)
   val funct7 = instr(31 ,25)
   //immediates are first defined as words
-  val imm = WireInit(0.U (32.W))
-  val Bimm = WireInit(0.U (32.W))
-  val Simm = WireInit(0.U (32.W))
-  val Jimm = WireInit(0.U (32.W))
-  val Uimm = WireInit(0.U (32.W))
+  val imm = WireInit(0.U (32.W)) //I-type immediate
+  val Bimm = WireInit(0.U (32.W)) //B-type immediate
+  val Simm = WireInit(0.U (32.W)) //S-type immediate
+  val Jimm = WireInit(0.U (32.W)) //J-type immediate
+  val Uimm = WireInit(0.U (32.W)) //U-type immediate
   Uimm := instr(31, 12) << 12 //Uimm(11, 0) = 0x00
-  val sign = instr(31)
-  val sraisign = reg(rs1)
+  val sign = instr(31) //for sign-extension
   when (sign) { //sign extension of immediates
     imm := Cat(0xFFFFF.U, instr(31, 20))
     Bimm := Cat(0xFFFFF.U, instr(31),instr(7),instr(30,25),instr(11,8),"b0".U)
@@ -75,7 +54,7 @@ class SingleCycleRiscV extends Module {
     Simm := Cat(instr(31,25),instr(11,7))
     Jimm := Cat(instr(31), instr(19, 12), instr(20), instr(30, 21), "b0".U)
   }
-  val shift = WireInit(0.U (5.W)) //kan måske ændres til reg(rs2) direkte
+  val shift = WireInit(0.U (5.W))
 
   //memory implementation
   val writeAddr = reg(rs1) + Simm
@@ -182,15 +161,18 @@ class SingleCycleRiscV extends Module {
     is(0x03.U) {
       switch(funct3) {
         is(0x0.U) { //lb
-          reg(rd) := mem.read(readAddr)
           when(mem.read(readAddr)(7)) { //Check msb for sign
-           reg(rd) := ~reg(rd) //sign-extend
+            reg(rd) := Cat(0xFFFFFF.U, mem.read(readAddr))
+          } otherwise {
+            reg(rd) := mem.read(readAddr)
           }
+
         }
         is(0x1.U) { //lh
-          reg(rd) := Cat(0x0000.U,mem.read(readAddr + 1.U), mem.read(readAddr))
           when(mem.read(readAddr + 1.U)(7)) { //Check msb for sign
-            reg(rd) := ~reg(rd) //sign-extend
+            reg(rd) := Cat(0xFFFF.U,mem.read(readAddr + 1.U), mem.read(readAddr))
+          } otherwise {
+            reg(rd) := Cat(0x0000.U,mem.read(readAddr + 1.U), mem.read(readAddr))
           }
         }
         is(0x2.U) { //lw

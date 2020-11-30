@@ -1,6 +1,5 @@
 import chisel3.iotesters._
 import org.scalatest._
-import scala.util.control.Breaks._
 import java.io._
 
 
@@ -9,9 +8,9 @@ class RiscVSpec extends FlatSpec with Matchers {
     chisel3.iotesters.Driver.execute(Array("--generate-vcd-output", "on"), () => new SingleCycleRiscV()) { c =>
       new PeekPokeTester(c) {
 
+        //method for binary dump
         def writeFile(): Unit = {
-          //val inputStream = new BufferedInputStream(new FileInputStream(""))
-          val outputStream = new FileOutputStream("binaryDump")
+          val outputStream = new FileOutputStream("binaryDump") //path to binary dump file
           for (i <- 0 until 32) {
             outputStream.write(peek(dut.io.regDeb0(i)).toByte)
             outputStream.write(peek(dut.io.regDeb1(i)).toByte)
@@ -20,13 +19,14 @@ class RiscVSpec extends FlatSpec with Matchers {
           }
         }
 
+        //method for comparing binary dump to .res file
         def compareFiles(): Unit = {
-          val bin = new FileInputStream("tests/task3/loop.res")
-          val res = new FileInputStream("binaryDump")
+          val res = new FileInputStream("tests/additional/test_bgeu.res") //path to .res file
+          val bin = new FileInputStream("binaryDump") //path to binary dump file
           var noError = true
           println("compare starts here:")
           for(i <- 0 until 128) {
-            if(bin.read() != res.read()) {
+            if(res.read() != bin.read()) {
               println("error: " + i)
               noError = false
             }
@@ -34,30 +34,24 @@ class RiscVSpec extends FlatSpec with Matchers {
           if(noError) println("Perfect match")
         }
 
+        //method for printing register file to terminal
         def printReg() = {
-          //for (i <- 0 until 32) {
-          //  print("x" + i + "\t")
-          //}
-          //println()
+          println("Register file (x0 .. x31)")
           for (i <- 0 until 32) {
-            print("x" + i + ": " + Integer.toHexString(peek(dut.io.regDeb(i)).toInt) + "\t")
+            print(Integer.toHexString(peek(dut.io.regDeb(i)).toInt) + " ")
           }
           println()
         }
 
-        var i = 0
-
+        //step through cycles until io.done is true
         do {
-          //if (i > 1245) println("PC = " + peek(dut.io.pcDeb) + ": 0x" + Integer.toHexString(peek(dut.io.imemDeb(peek(dut.io.pcDeb).toInt / 4)).toInt))
           step(1)
-          i += 1
-          //if (i > 1245) printReg()
         }
-        while(peek(dut.io.done) == 0 && i < 3000)
+        while(peek(dut.io.done) == 0)
+        //print register file to terminal and "binaryDump" file
         printReg()
         writeFile()
-        compareFiles()
-        //1245 cycles to finish L7
+        //compareFiles()
       }
     }
   }
